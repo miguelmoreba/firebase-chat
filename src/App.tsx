@@ -1,9 +1,21 @@
 import "./App.css";
 import { initializeApp } from "firebase/app";
 import { useAuthState } from "react-firebase-hooks/auth";
-import { collection, DocumentData, getFirestore, limit, orderBy, query } from 'firebase/firestore';
+import {
+  addDoc,
+  collection,
+  doc,
+  DocumentData,
+  getFirestore,
+  limit,
+  orderBy,
+  query,
+  serverTimestamp,
+  setDoc,
+} from "firebase/firestore";
 import { getAuth, GoogleAuthProvider, signInWithPopup } from "firebase/auth";
-import { useCollectionData } from 'react-firebase-hooks/firestore';
+import { useCollectionData } from "react-firebase-hooks/firestore";
+import { FormEvent, useRef, useState } from "react";
 
 const app = initializeApp({
   apiKey: "AIzaSyBz_7XXSL4wo_RWeHionxo88Jz2d1vKuZU",
@@ -21,12 +33,7 @@ const firestore = getFirestore(app);
 export const App = () => {
   const [user] = useAuthState(appAuth);
 
-  return (
-    <div className="App">
-      <header></header>
-      {user ? <ChatRoom/> : <SignIn />}
-    </div>
-  );
+  return <div className="App">{user ? <ChatRoom /> : <SignIn />}</div>;
 };
 
 export const SignIn = () => {
@@ -47,30 +54,66 @@ export const SignOut = () => {
 };
 
 export const ChatRoom = () => {
+  const dummy = useRef() as React.MutableRefObject<HTMLInputElement>;
 
-  const messagesRef = collection(firestore, 'messages');
-  const q = query(messagesRef,orderBy('createdAt'), limit(25));
+  const messagesRef = collection(firestore, "messages");
+  const q = query(messagesRef, orderBy("createdAt"), limit(25));
 
   const [messages] = useCollectionData(q);
-  console.log('messages', messages)
+
+  const [formValue, setFormValue] = useState("");
+
+  const sendMessage = async (e: FormEvent) => {
+    e.preventDefault();
+
+    const uid = appAuth.currentUser?.uid;
+    const photoUrl = appAuth.currentUser?.photoURL;
+
+    await addDoc(messagesRef, {
+      text: formValue,
+      createdAt: serverTimestamp(),
+      photoUrl,
+      uid,
+    });
+
+    setFormValue("");
+
+    dummy.current.scrollIntoView();
+  };
 
   return (
-    <div>
-      {messages && messages.map(msg => <ChatMessage key={msg.id} message={msg}/>)}
-    </div>
-  )
-}
+    <>
+      <main>
+        {messages &&
+          messages.map((msg) => <ChatMessage key={msg.id} message={msg} />)}
+          <div ref={dummy}></div>
+      </main>
+      <form onSubmit={sendMessage}>
+        <input
+          value={formValue}
+          onChange={(e) => setFormValue(e.target.value)}
+        />
+        <button type="submit">Send</button>
+      </form>
+    </>
+  );
+};
 
 type ChatMessageProps = {
-  message: DocumentData
-}
+  message: DocumentData;
+};
 
 export const ChatMessage: React.FC<ChatMessageProps> = (props) => {
-  const {text, uid} = props.message;
+  const { text, uid, photoUrl } = props.message;
 
-  return <p>{text}</p>
-}
+  const messageClass = uid === appAuth.currentUser?.uid ? "sent" : "recieved";
 
-
+  return (
+    <div className={`message ${messageClass}`}>
+      {photoUrl && <img src={photoUrl} alt="profile" />}
+      <p>{text}</p>
+    </div>
+  );
+};
 
 export default App;
